@@ -148,6 +148,7 @@ $$ |      $$$$$$$$\ $$ |    $$$$$$$  | $$$$$$  |  $$ |
 \__|      \________|\__|    \_______/  \______/   \__|                                                    
 """)
     print("FLYBOT - Telegram Fowarding by Sanji")
+    print("Visit me on github https://github.com/sanjiproject")
     print("")
     print("Choose an option:")
     print("1. List All Chat on your Telegram")
