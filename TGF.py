@@ -167,7 +167,7 @@ $$ |      $$$$$$$$\ $$ |    $$$$$$$  | $$$$$$  |  $$ |
         print("Source Chat ID:", source_chat_id)
         
         with open("2.Target Outgoing.txt", "r") as file:
-            destination_channel_ids = [int(line.strip()) for line in file.readlines()]
+            destination_channel_ids = [int(line.strip()) for line in file.readlines() if line.strip()]
         print("Destination Channel IDs:", destination_channel_ids)
         
         print("Enter keywords if you want to forward messages with specific keywords, or leave blank to forward every message!")
