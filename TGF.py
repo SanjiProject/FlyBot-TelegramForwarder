@@ -1,8 +1,9 @@
 import os
 import sys
+import time
 import asyncio
 from telethon.sync import TelegramClient
-from telethon.errors.rpcerrorlist import ForbiddenError
+from telethon.errors.rpcerrorlist import ChatAdminRequiredError, SessionPasswordNeededError, ForbiddenError
 from telethon import types
 
 class TelegramForwarder:
@@ -15,15 +16,12 @@ class TelegramForwarder:
     async def forward_messages_to_channels(self, source_chat_id, destination_channel_ids, keywords):
         await self.client.connect()
 
-        # Ensure you're authorized
         if not await self.client.is_user_authorized():
             await self.client.send_code_request(self.phone_number)
             try:
-                # Prompt the user for the code and password
                 code = input('Enter the code: ')
-                await self.client.sign_in(self.phone_number, code,)
+                await self.client.sign_in(self.phone_number, code)
             except SessionPasswordNeededError:
-                # Password is required for two-step verification
                 password = input('Two-step verification is enabled. Please enter your password: ')
                 await self.client.sign_in(password=password)
 
@@ -31,59 +29,45 @@ class TelegramForwarder:
 
         while True:
             print("Checking Message to Make it Flying...")
-            # Get new messages since the last checked message
             messages = await self.client.get_messages(source_chat_id, min_id=last_message_id, limit=None)
 
             for message in reversed(messages):
-                try:
-                    if message.media:
-                        if isinstance(message.media, types.MessageMediaDocument) and message.media.document.mime_type == 'video/mp4':
-                            # Handle GIFs
-                            await self.forward_message(destination_channel_ids, message)
-                        elif isinstance(message.media, types.MessageMediaPhoto):
-                            # Forward photos
-                            await self.forward_message(destination_channel_ids, message)
-                    elif keywords:
-                        # Check if the message text includes any of the keywords
-                        if message.text and any(keyword in message.text.lower() for keyword in keywords):
-                            print(f"Message contains a keyword: {message.text}")
-                            await self.forward_message(destination_channel_ids, message)
-                    else:
-                        # Forward the message to each destination channel
+                if message.media:
+                    if isinstance(message.media, types.MessageMediaDocument) and message.media.document.mime_type == 'video/mp4':
                         await self.forward_message(destination_channel_ids, message)
+                    elif isinstance(message.media, types.MessageMediaPhoto):
+                        await self.forward_message(destination_channel_ids, message)
+                elif keywords:
+                    if message.text and any(keyword in message.text.lower() for keyword in keywords):
+                        print(f"Message contains a keyword: {message.text}")
+                        await self.forward_message(destination_channel_ids, message)
+                else:
+                    await self.forward_message(destination_channel_ids, message)
 
-                    # Update the last message ID
-                    last_message_id = max(last_message_id, message.id)
-                except Exception as e:
-                    print(f"An error occurred while forwarding the message: {e}")
+                last_message_id = max(last_message_id, message.id)
 
-            # Add a delay before checking for new messages again
-            await asyncio.sleep(1)  # Adjust the delay time as needed
-            
+            await asyncio.sleep(2)
+
     async def forward_message(self, destination_channel_ids, message):
-        # Forward the message to each destination channel
         for destination_channel_id in destination_channel_ids:
             try:
                 if message.media:
                     if message.text:
-                        # If the message contains both text and media, concatenate and forward together
                         caption = f"{message.text}\n{message.media.caption}" if hasattr(message.media, 'caption') else message.text
                         await self.client.send_file(destination_channel_id, message.media, caption=caption)
                     else:
-                        # If the message contains only media, forward it with optional caption
                         caption = message.media.caption if hasattr(message.media, 'caption') else None
                         await self.client.send_file(destination_channel_id, message.media, caption=caption)
                 elif message.text:
-                    # If the message contains only text, forward it
                     await self.client.send_message(destination_channel_id, message.text)
                 print("Message forwarded")
             except ForbiddenError as e:
                 if "CHAT_SEND_PHOTOS_FORBIDDEN" in str(e):
                     print(f"Permission denied to send photos in the destination channel: {destination_channel_id}. Skipping.")
                 else:
-                    print(f"An error occurred while forwarding the message: {e}")
-            except Exception as e:
-                print(f"An error occurred while forwarding the message: {e}")
+                    print(f"Error forwarding message to channel {destination_channel_id}: {e}")  # Include the chat ID in the error message
+            except ChatAdminRequiredError:
+                print(f"Chat ID {destination_channel_id} Not Admin! Please Modify it to Admin.")
 
     async def insert_incoming(self):
         while True:
@@ -91,7 +75,7 @@ class TelegramForwarder:
             if not chat_id:
                 break
             with open("1.Your TG Source.txt", "a") as file:
-                file.write(chat_id + "\n")  # New line after each value
+                file.write(chat_id + "\n")
             print("New value inserted into 1.Your TG Source.txt.")
 
     async def insert_outgoing(self):
@@ -100,31 +84,30 @@ class TelegramForwarder:
             if not channel_id:
                 break
             with open("2.Target Outgoing.txt", "a") as file:
-                file.write(channel_id + "\n")  # New line after each value
+                file.write(channel_id + "\n")
             print("New value inserted into 2.Target Outgoing.txt.")
 
     async def list_chats(self):
         await self.client.connect()
 
-        # Ensure you're authorized
         if not await self.client.is_user_authorized():
             await self.client.send_code_request(self.phone_number)
-            await self.client.sign_in(self.phone_number, input('Enter the code: '))
+            try:
+                await self.client.sign_in(self.phone_number, input('Enter the code: '))
+            except SessionPasswordNeededError:
+                password = input('Two-step verification is enabled. Please enter your password: ')
+                await self.client.sign_in(password=password)
 
-        # Get a list of all the dialogs (chats)
         dialogs = await self.client.get_dialogs()
         
-        # Open a new text file to write the chat information
         with open(f"3.ChatIDList.txt", "w", encoding="utf-8") as chats_file:
-            # Write information about each chat to the text file
             for dialog in dialogs:
                 chat_info = f"Chat ID: {dialog.id}, Title: {dialog.title}\n"
-                print(chat_info)  # Print to console
-                chats_file.write(chat_info)  # Write to text file
+                print(chat_info)
+                chats_file.write(chat_info)
 
         print("File Saved on 3.ChatIDList Please Kindly Check!")
 
-# Function to read credentials from file
 def read_credentials():
     try:
         with open("ID.txt", "r") as file:
@@ -137,7 +120,6 @@ def read_credentials():
         print("No ID Detected Please Fill the Information")
         return None, None, None
 
-# Function to write credentials to file
 def write_credentials(api_id, api_hash, phone_number):
     with open("ID.txt", "w") as file:
         file.write(api_id + "\n")
@@ -145,49 +127,44 @@ def write_credentials(api_id, api_hash, phone_number):
         file.write(phone_number + "\n")
 
 async def main():
-    # Attempt to read credentials from file
     api_id, api_hash, phone_number = read_credentials()
 
-    # If credentials not found in file, prompt the user to input them
     if api_id is None or api_hash is None or phone_number is None:
         api_id = input("Enter your API ID: ")
         api_hash = input("Enter your API Hash: ")
         phone_number = input("Enter your phone number: ")
-        # Write credentials to file for future use
         write_credentials(api_id, api_hash, phone_number)
 
     forwarder = TelegramForwarder(api_id, api_hash, phone_number)
     
     print("""
-    $$$$$$$$$\ $$\   $$\     $$\ $$$$$$$\   $$$$$$\ $$$$$$$$\ 
-    $$  _____|$$ |  \$$\   $$  |$$  __$$\ $$  __$$\\__$$  __|
-    $$ |      $$ |   \$$\ $$  / $$ |  $$ |$$ /  $$ |  $$ |   
-    $$$$$\    $$ |    \$$$$  /  $$$$$$$\ |$$ |  $$ |  $$ |   
-    $$  __|   $$ |     \$$  /   $$  __$$\ $$ |  $$ |  $$ |   
-    $$ |      $$ |      $$ |    $$ |  $$ |$$ |  $$ |  $$ |   
-    $$ |      $$$$$$$$\ $$ |    $$$$$$$  | $$$$$$  |  $$ |   
-    \__|      \________|\__|    \_______/  \______/   \__|                                                    
-    """)
+$$$$$$$$\ $$\   $$\     $$\ $$$$$$$\   $$$$$$\ $$$$$$$$\ 
+$$  _____|$$ |  \$$\   $$  |$$  __$$\ $$  __$$\\__$$  __|
+$$ |      $$ |   \$$\ $$  / $$ |  $$ |$$ /  $$ |  $$ |   
+$$$$$\    $$ |    \$$$$  /  $$$$$$$\ |$$ |  $$ |  $$ |   
+$$  __|   $$ |     \$$  /   $$  __$$\ $$ |  $$ |  $$ |   
+$$ |      $$ |      $$ |    $$ |  $$ |$$ |  $$ |  $$ |   
+$$ |      $$$$$$$$\ $$ |    $$$$$$$  | $$$$$$  |  $$ |   
+\__|      \________|\__|    \_______/  \______/   \__|                                                    
+""")
     print("FLYBOT - Telegram Fowarding by Sanji")
+    print("Visit me on github https://github.com/sanjiproject")
     print("")
     print("Choose an option:")
     print("1. List All Chat on your Telegram")
     print("2. Start Forwarding Messages")
-    print("3. Reset Bot")
-    print("4. Insert Incoming")
-    print("5. Insert Outgoing")
+    print("3. Insert Incoming")
+    print("4. Insert Outgoing")
     
     choice = input("Please Choose Bro.. : ")
     
     if choice == "1":
         await forwarder.list_chats()
     elif choice == "2":
-        # Read source chat ID from file
         with open("1.Your TG Source.txt", "r") as file:
             source_chat_id = int(file.readline().strip())
         print("Source Chat ID:", source_chat_id)
         
-        # Read destination channel IDs from file
         with open("2.Target Outgoing.txt", "r") as file:
             destination_channel_ids = [int(line.strip()) for line in file.readlines()]
         print("Destination Channel IDs:", destination_channel_ids)
@@ -195,23 +172,14 @@ async def main():
         print("Enter keywords if you want to forward messages with specific keywords, or leave blank to forward every message!")
         keywords = input("Put keywords (comma separated if multiple, or leave blank): ").split(",")
         
-        try:
-            await forwarder.forward_messages_to_channels(source_chat_id, destination_channel_ids, keywords)  # Corrected method name
-        except Exception as e:
-            print(f"An error occurred while forwarding messages: {e}")
+        await forwarder.forward_messages_to_channels(source_chat_id, destination_channel_ids, keywords)
 
     elif choice == "3":
-        os.remove("ID.txt")
-        print("ID.txt deleted configuration has been Reset!.")
-        os.execl(sys.executable, sys.executable, *sys.argv)  # Restart the script
-    elif choice == "4":
         await forwarder.insert_incoming()
-    elif choice == "5":
+    elif choice == "4":
         await forwarder.insert_outgoing()
     else:
         print("Invalid choice")
-
-...
 
 if __name__ == "__main__":
     asyncio.run(main())
