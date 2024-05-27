@@ -61,13 +61,10 @@ class TelegramForwarder:
                 elif message.text:
                     await self.client.send_message(destination_channel_id, message.text)
                 print("Message forwarded")
-            except ForbiddenError as e:
-                if "CHAT_SEND_PHOTOS_FORBIDDEN" in str(e):
-                    print(f"Permission denied to send photos in the destination channel: {destination_channel_id}. Skipping.")
-                else:
-                    print(f"Error forwarding message to channel {destination_channel_id}: {e}")  # Include the chat ID in the error message
-            except ChatAdminRequiredError:
-                print(f"Chat ID {destination_channel_id} Not Admin! Please Modify it to Admin.")
+            except Exception as e:
+                print(f"Error forwarding message to channel ID {destination_channel_id}: {e}. Skipping.")
+                continue  # Continue to the next channel ID
+
 
     async def insert_incoming(self):
         while True:
@@ -155,24 +152,33 @@ $$ |      $$$$$$$$\ $$ |    $$$$$$$  | $$$$$$  |  $$ |
     print("2. Start Forwarding Messages")
     print("3. Insert Incoming")
     print("4. Insert Outgoing")
+    print("5. Reset Bot")
     
     choice = input("Please Choose Bro.. : ")
     
     if choice == "1":
         await forwarder.list_chats()
     elif choice == "2":
-        with open("1.Your TG Source.txt", "r") as file:
-            source_chat_id = int(file.readline().strip())
-        print("Source Chat ID:", source_chat_id)
-        
-        with open("2.Target Outgoing.txt", "r") as file:
-            destination_channel_ids = [int(line.strip()) for line in file.readlines()]
-        print("Destination Channel IDs:", destination_channel_ids)
-        
-        print("Enter keywords if you want to forward messages with specific keywords, or leave blank to forward every message!")
-        keywords = input("Put keywords (comma separated if multiple, or leave blank): ").split(",")
-        
-        await forwarder.forward_messages_to_channels(source_chat_id, destination_channel_ids, keywords)
+            with open("1.Your TG Source.txt", "r") as file:
+                source_chat_id = int(file.readline().strip())
+            print("Source Chat ID:", source_chat_id)
+            
+            destination_channel_ids = []
+            with open("2.Target Outgoing.txt", "r") as file:
+                for line in file:
+                    line = line.strip()
+                    if line:
+                        try:
+                            channel_id = int(line)
+                            destination_channel_ids.append(channel_id)
+                        except ValueError:
+                            print(f"Invalid line in '2.Target Outgoing.txt': {line}. Skipping.")
+            print("Destination Channel IDs:", destination_channel_ids)
+            
+            print("Enter keywords if you want to forward messages with specific keywords, or leave blank to forward every message!")
+            keywords = input("Put keywords (comma separated if multiple, or leave blank): ").split(",")
+            
+            await forwarder.forward_messages_to_channels(source_chat_id, destination_channel_ids, keywords)
 
     elif choice == "3":
         await forwarder.insert_incoming()
